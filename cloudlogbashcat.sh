@@ -1,6 +1,7 @@
 #! /bin/bash
 
-# cloudlogbashcat.sh - A simple script to keep Cloudlog in synch with rigctld
+# cloudlogbashcat.sh 
+# A simple script to keep Cloudlog in synch with rigctld or flrig.
 # Copyright (C) 2018  Tony Corbett, G0WFV
 #
 # This program is free software; you can redistribute it and/or modify
@@ -19,31 +20,97 @@
 
 DEBUG=0
 
-rigctldFreq=0
-rigctldOldFreq=1
+rigFreq=0
+rigOldFreq=1
 
-rigctldMode="MATCH"
-rigctldOldMode="NO MATCH"
+rigMode="MATCH"
+rigOldMode="NO MATCH"
 
 delay=1
 
+# load in config ...
 source cloudlogbashcat.conf
 
-# Open FD 3 to rigctld ...
-exec 3<>/dev/tcp/$rigctldHost/$rigctldPort
+simpleArg() {
+    local arg="$1"
+    local type=${arg%%:*} val=${arg#*:}
+        echo -e "${indent}<param><value><$type>$val</$type></value></param>"
+}
+
+structArg() {
+    local arg="$1"
+        : parse wait complete ...
+}
+
+generateRequestXml() {
+    method=$1; shift
+    echo '<?xml version="1.0"?>'
+    echo "<methodCall>"
+    echo "    <methodName>$method</methodName>"
+    echo "    <params>"
+
+    indent="    "
+    for arg; do
+        indent="${indent}    "
+        case $arg in
+        struct:*) structArg "$arg";;
+        *) simpleArg "$arg";;
+        esac
+    done
+
+    echo "    </params>"
+    echo "</methodCall>"
+}
 
 while true; do
-	# Get rigctld frequency, mode and bandwidth - accepts multiple commands
-	echo -e "fm" >&3
-	read -r -u3 rigctldFreq
-	read -r -u3 rigctldMode
-	read -r -u3 rigctldWidth
+	case $rigControlSoftware in
+		rigctld)
+			# Open FD 3 to rig control server ...
+			exec 3<>/dev/tcp/$host/$port
+
+			if [[ $? -ne 0 ]]; then
+				echo "Unable to contact server" >&2
+				exit 1
+			fi
+
+			# Get rigctld frequency, mode and bandwidth - accepts multiple commands
+			echo -e "fm" >&3
+			read -r -u3 rigFreq
+			read -r -u3 rigMode
+			read -r -u3 rigWidth
+
+			# Close FD 3
+			exec 3>&-
+			;;
+
+		flrig)
+			# Get flrig frequency ...
+			rpcxml=$(generateRequestXml "rig.get_vfo")
+			rigFreq=$(curl -k $verbose --data "$rpcxml" "$host:$port" 2>/dev/null | xmllint --format --xpath '//value/text()' - 2>&1)
+
+			if [[ $? -ne 0 ]]; then
+				echo "Unable to contact server" >&2
+				exit 1
+			fi
+
+			# Get flrig mode ...
+			rpcxml=$(generateRequestXml "rig.get_mode")
+			rigMode=$(curl -k $verbose --data "$rpcxml" "$host:$port" 2>/dev/null | xmllint --format --xpath '//value/text()' -)
+			;;
+
+		*)
+			echo "Unknown rig control server type" >&2
+			exit 1
+			;;
+	esac
+
+
 		
-  if [ $rigctldFreq -ne $rigctldOldFreq  ] || [ "$rigctldMode" != "$rigctldOldMode"  ]; then
-    # rigctld freq or mode changed, update Cloudlog
-    [[ $DEBUG -eq 1 ]] && printf  "%-10d   %-6s\n" $rigctldFreq $rigctldMode
-    rigctldOldFreq=$rigctldFreq
-    rigctldOldMode=$rigctldMode
+  if [ $rigFreq -ne $rigOldFreq  ] || [ "$rigMode" != "$rigOldMode"  ]; then
+    # rig freq or mode changed, update Cloudlog
+    [[ $DEBUG -eq 1 ]] && printf  "%-10d   %-6s\n" $rigFreq $rigMode
+    rigOldFreq=$rigFreq
+    rigOldMode=$rigMode
 
     curl --silent --insecure \
          --header "Content-Type: application/json" \
@@ -51,8 +118,8 @@ while true; do
          --data "{ 
            \"key\":\"$cloudlogApiKey\",
            \"radio\":\"$cloudlogRadioId\",
-           \"frequency\":\"$rigctldFreq\",
-           \"mode\":\"$rigctldMode\",
+           \"frequency\":\"$rigFreq\",
+           \"mode\":\"$rigMode\",
            \"timestamp\":\"$(date +"%Y/%m/%d %H:%M")\"
          }" $cloudlogApiUrl >/dev/null 2>&1
   fi
