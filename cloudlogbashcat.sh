@@ -114,6 +114,8 @@ while true; do
 
     curl --silent --insecure \
          --header "Content-Type: application/json" \
+         ${cloudlogHttpAuth:+"--header"} \
+         ${cloudlogHttpAuth:+"Authorization: $cloudlogHttpAuth"} \
          --request POST \
          --data "{ 
            \"key\":\"$cloudlogApiKey\",
