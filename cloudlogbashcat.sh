@@ -122,7 +122,7 @@ while true; do
            \"radio\":\"$cloudlogRadioId\",
            \"frequency\":\"$rigFreq\",
            \"mode\":\"$rigMode\",
-           \"timestamp\":\"$(date +"%Y/%m/%d %H:%M")\"
+           \"timestamp\":\"$(date -u +"%Y/%m/%d %H:%M")\"
          }" $cloudlogApiUrl >/dev/null 2>&1
   fi
 
