@@ -1,0 +1,16 @@
+[Unit]
+Description=CloudlogBashCat
+After=network.target
+StartLimitBurst=2
+StartLimitInterval=30
+
+[Service]
+ExecStartPre=/bin/sleep 10
+Restart=on-failure
+RestartSec=5
+
+# Note: Update the path to your script here
+ExecStart=/opt/programs/CloudlogBashCat/cloudlogbashcat.sh
+
+[Install]
+WantedBy=multi-user.target
