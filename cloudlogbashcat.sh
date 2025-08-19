@@ -29,6 +29,8 @@ rigOldMode="NO MATCH"
 delay=1
 
 # load in config ...
+cur_dir=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+pushd $cur_dir
 source cloudlogbashcat.conf
 
 simpleArg() {
